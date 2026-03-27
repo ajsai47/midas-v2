@@ -29,12 +29,17 @@ dependencies = [
   "pip",
   "Levenshtein",
   "julius",
-  "transformers"
+  "transformers",
+  "click",
+  "rich",
 ]
 
+[project.scripts]
+tribe-score = "tribe_score.cli:main"
+
 [project.urls]
-Homepage = "https://github.com/facebookresearch/tribev2"
-Repository = "https://github.com/facebookresearch/tribev2"
+Homepage = "https://github.com/ajsai47/tribev2"
+Repository = "https://github.com/ajsai47/tribev2"
 
 [project.optional-dependencies]
   plotting = [
