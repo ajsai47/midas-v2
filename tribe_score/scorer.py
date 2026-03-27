@@ -88,10 +88,29 @@ class NeuralEngagementScorer:
         from tribev2.demo_utils import TribeModel
 
         logger.info("Loading TRIBE model from %s...", self.model_id)
+        # Build config overrides for local environment
+        import torch as _torch
+        config_update = {}
+
+        # Override device for feature extractors if no CUDA
+        if not _torch.cuda.is_available():
+            config_update["data.text_feature.device"] = "cpu"
+            config_update["data.audio_feature.device"] = "cpu"
+            config_update["data.video_feature.image.device"] = "cpu"
+
+        # Use ungated copy of Llama 3.2-3B if the original is inaccessible
+        try:
+            from transformers import AutoConfig
+            AutoConfig.from_pretrained("meta-llama/Llama-3.2-3B")
+        except (OSError, Exception):
+            logger.info("meta-llama/Llama-3.2-3B not accessible, using unsloth/Llama-3.2-3B")
+            config_update["data.text_feature.model_name"] = "unsloth/Llama-3.2-3B"
+
         self._model = TribeModel.from_pretrained(
             self.model_id,
             cache_folder=self.cache_folder,
             device=self.device,
+            config_update=config_update or None,
         )
         logger.info("Model loaded on %s", self.device)
 

@@ -315,4 +315,4 @@ def get_topk_rois(data: np.ndarray, hemi="both", mesh="fsaverage5", k=10) -> lis
     else:
         labels = get_hcp_labels(mesh=mesh, combine=False, hemi=hemi).keys()
     top_k = np.argsort(values)[::-1][:k]
-    return np.array(labels)[top_k]
+    return np.array(list(labels))[top_k]

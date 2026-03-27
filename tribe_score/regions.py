@@ -10,7 +10,7 @@ ENGAGEMENT_REGIONS: dict[str, list[str]] = {
     # Emotional salience -> shares/comments
     # Anterior Insula, ACC subregions, temporal pole
     "emotional_arousal": [
-        "AI",        # Anterior Insula
+        "AAIC",      # Anterior Agranular Insular Complex
         "p24",       # Posterior cingulate area 24
         "33pr",      # Area 33 prime
         "a24",       # Anterior cingulate area 24
