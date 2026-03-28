@@ -1,184 +1,131 @@
 <div align="center">
 
-# TRIBE v2
+# tribe_score
 
-**A Foundation Model of Vision, Audition, and Language for In-Silico Neuroscience**
+**Predict social media virality using brain activation patterns.**
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/facebookresearch/tribev2/blob/main/tribe_demo.ipynb)
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 
-📄 [Paper](https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/) ▶️ [Demo](https://aidemos.atmeta.com/tribev2/) | 🤗 [Weights](https://huggingface.co/facebook/tribev2)
+*What if you could run content through a brain model and know if it'll go viral — before you post it?*
 
 </div>
 
-TRIBE v2 is a deep multimodal brain encoding model that predicts fMRI brain responses to naturalistic stimuli (video, audio, text). It combines state-of-the-art feature extractors — [**LLaMA 3.2**](https://huggingface.co/meta-llama/Llama-3.2-3B) (text), [**V-JEPA2**](https://huggingface.co/facebook/vjepa2-vitg-fpc64-256) (video), and [**Wav2Vec-BERT**](https://huggingface.co/facebook/w2v-bert-2.0) (audio) — into a unified Transformer architecture that maps multimodal representations onto the cortical surface.
+## The idea
+
+Meta built [TRIBE v2](https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/) — a foundation model that predicts fMRI brain responses to any content (text, audio, video). It maps input through LLaMA 3.2, V-JEPA2, and Wav2Vec-BERT onto a cortical surface model of ~20k brain vertices.
+
+We asked a different question: **do the brain regions that light up for viral content differ from non-viral content?**
+
+Yes. Dramatically.
+
+We ran 20 LinkedIn posts with known engagement data through TRIBE v2, analyzed activation across all 180 HCP brain regions, and found **10 regions correlated with real-world virality at p<0.01**. The pattern is clear:
+
+- **Reward circuits fire** (orbitofrontal cortex) — the "I want more" response
+- **Memory encodes** (hippocampus) — memorable content gets shared
+- **Social cognition activates** (temporal pole) — social processing drives viral spread
+- **Auditory cortex suppresses** — viral content is visual/conceptual, not auditory
+
+We turned this into a scoring formula. Feed any text into `tribe_score`, and it tells you how viral-ready it is based on the neurological response pattern.
+
+## Validation
+
+| Metric | Value |
+|--------|-------|
+| Spearman correlation with real engagement | **rho = 0.7522** (p = 0.000131) |
+| Viral post average NES | 81.9 |
+| Low-engagement post average NES | 32.6 |
+| Separation delta | +49.3 points |
+
+The brain knows what's going to spread before the algorithm does.
 
 ## Quick start
 
-Load a pretrained model from HuggingFace and predict brain responses to a video:
-
-```python
-from tribev2 import TribeModel
-
-model = TribeModel.from_pretrained("facebook/tribev2", cache_folder="./cache")
-
-df = model.get_events_dataframe(video_path="path/to/video.mp4")
-preds, segments = model.predict(events=df)
-print(preds.shape)  # (n_timesteps, n_vertices)
-```
-
-Predictions are for the "average" subject (see paper for details) and live on the **fsaverage5** cortical mesh (~20k vertices). You can also pass `text_path` or `audio_path` to `model.get_events_dataframe` — text is automatically converted to speech and transcribed to obtain word-level timings.
-
-For a full walkthrough with brain visualizations, see the [Colab demo notebook](https://colab.research.google.com/github/facebookresearch/tribev2/blob/main/tribe_demo.ipynb).
-
-## Installation
-
-**Basic** (inference only):
 ```bash
+git clone https://github.com/ajsai47/tribev2.git
+cd tribev2
 pip install -e .
 ```
 
-**With brain visualization**:
-```bash
-pip install -e ".[plotting]"
-```
-
-**With training dependencies** (PyTorch Lightning, W&B, etc.):
-```bash
-pip install -e ".[training]"
-```
-
-## Training a model from scratch
-
-### 1. Set environment variables
-
-Configure data/output paths and Slurm partition (or edit `tribev2/grids/defaults.py` directly):
-
-```bash
-export DATAPATH="/path/to/studies"
-export SAVEPATH="/path/to/output"
-export SLURM_PARTITION="your_partition"
-```
-
-### 2. Authenticate with HuggingFace
-
-The text encoder requires access to the gated [LLaMA 3.2-3B](https://huggingface.co/meta-llama/Llama-3.2-3B) model:
-
-```bash
-huggingface-cli login
-```
-
-Create a `read` [access token](https://huggingface.co/settings/tokens) and paste it when prompted.
-
-### 3. Run training
-
-**Local test run:**
-```bash
-python -m tribev2.grids.test_run
-```
-
-**Grid search on Slurm:**
-```bash
-python -m tribev2.grids.run_cortical
-python -m tribev2.grids.run_subcortical
-```
-
-## Project structure
-
-```
-tribev2/
-├── main.py              # Experiment pipeline: Data, TribeExperiment
-├── model.py             # FmriEncoder: Transformer-based multimodal→fMRI model
-├── pl_module.py         # PyTorch Lightning training module
-├── demo_utils.py        # TribeModel and helpers for inference from text/audio/video
-├── eventstransforms.py  # Custom event transforms (word extraction, chunking, …)
-├── utils.py             # Multi-study loading, splitting, subject weighting
-├── utils_fmri.py        # Surface projection (MNI / fsaverage) and ROI analysis
-├── grids/
-│   ├── defaults.py      # Full default experiment configuration
-│   └── test_run.py      # Quick local test entry point
-├── plotting/            # Brain visualization (PyVista & Nilearn backends)
-└── studies/             # Dataset definitions (Algonauts2025, Lahner2024, …)
-```
-
----
-
-## tribe_score — Neural Engagement Scoring
-
-`tribe_score` is a scoring engine built on top of TRIBE v2 that predicts how engaging content will be on social media (LinkedIn). It uses 10 brain regions empirically correlated with post engagement (p<0.01, n=20 posts) to compute a **Neural Engagement Score (NES)** from 0–100.
-
-**Validation**: Spearman rho=0.7522 (p=0.000131) with actual engagement. Viral posts average NES=81.9 vs low-engagement posts at NES=32.6.
-
-### Python API
+### Score content
 
 ```python
 from tribe_score import NeuralEngagementScorer
 
 scorer = NeuralEngagementScorer()
 
-# Score inline text
 result = scorer.score_text("I just got fired from Google. Best thing that ever happened.")
-print(result.nes)            # 0-100 composite score
-print(result.tier)           # e.g. "NEURAL VIRAL"
-print(result.group_scores)   # per-group breakdown
-print(result.top_regions)    # top activated HCP regions
-
-# Score a file
-result = scorer.score("post.txt")
-
-# Compare variants
-results = scorer.compare("version_a.txt", "version_b.txt")
+print(result.nes)            # 0-100 Neural Engagement Score
+print(result.tier)           # NEURAL VIRAL / HIGH / MODERATE / LOW / MINIMAL
+print(result.group_scores)   # reward, memory, social, auditory breakdown
 ```
 
 ### CLI
 
 ```bash
-# Score text
 tribe-score score --text "Your post content here"
 tribe-score score --text "Your post" --json
-
-# Score a file
-tribe-score score post.txt
-
-# Compare variants
 tribe-score compare --text "Version A" --text "Version B"
-
-# Explain per-region breakdown
-tribe-score explain --text "Your post content here"
-
-# Generate brain heatmap (requires plotting extras)
+tribe-score explain --text "Why does this work?"
 tribe-score heatmap --text "Your post" --output brain.png
 ```
 
-### How Scoring Works
+### Compare variants
 
-The scorer extracts activation from 10 HCP brain regions that showed statistically significant correlation with LinkedIn engagement:
+```bash
+tribe-score compare \
+  --text "I just raised $5M for my AI startup" \
+  --text "Lessons from raising a seed round in 2026"
+```
 
-| Group | Regions | Signal |
-|-------|---------|--------|
-| **Reward** | pOFC, OFC | Higher activation → higher engagement |
-| **Memory** | Hippocampus | Higher activation → higher engagement |
-| **Social** | TGd, TGv (temporal pole) | Higher activation → higher engagement |
-| **Auditory** | TA2, A4, PBelt, MBelt, A5 | **Suppressed** in viral content |
+Returns a ranked table with NES scores and per-region breakdowns — pick the version that activates the right brain regions.
 
-Each region's activation is z-scored against calibration data, then weighted by its Spearman correlation coefficient. Brain variability (std across vertices) is also factored in — more focused activation patterns score higher.
+## The scoring formula
 
-### Scoring Tiers
+10 brain regions, empirically selected. Each region's activation is z-scored against calibration data, then weighted by its correlation with engagement.
 
-| NES Range | Tier | Meaning |
-|-----------|------|---------|
-| 80–100 | NEURAL VIRAL | Strong reward + memory + social, suppressed auditory |
-| 60–79 | HIGH ACTIVATION | Good engagement pattern |
+| Group | Brain Regions | Correlation | Signal |
+|-------|--------------|-------------|--------|
+| **Reward** | pOFC (rho=+0.66), OFC (+0.60) | Positive | Higher reward activation → more engagement |
+| **Memory** | Hippocampus (+0.63) | Positive | Stronger encoding → more shares |
+| **Social** | Temporal pole dorsal (+0.61), ventral (+0.57) | Positive | Social processing → viral spread |
+| **Auditory** | TA2 (-0.63), A4 (-0.59), PBelt (-0.58), MBelt (-0.58), A5 (-0.57) | **Negative** | Suppressed auditory cortex → higher engagement |
+| **Focus** | Brain variability (-0.60) | **Negative** | Focused activation > diffuse |
+
+### Tiers
+
+| NES | Tier | Pattern |
+|-----|------|---------|
+| 80–100 | **NEURAL VIRAL** | Strong reward + memory + social, suppressed auditory |
+| 60–79 | HIGH ACTIVATION | Good engagement region activation |
 | 40–59 | MODERATE | Mixed signal |
 | 20–39 | LOW ACTIVATION | Weak engagement pattern |
 | 0–19 | MINIMAL | No engagement signal |
 
----
+## What we built
 
-## Contributing to open science
+~800 lines on top of Meta's TRIBE v2:
 
-If you use this software, please share your results with the broader research community using the following citation:
+```
+tribe_score/              # Our scoring engine
+├── scorer.py             # Brain activation → engagement score
+├── cli.py                # tribe-score CLI
+├── compare.py            # A/B comparison tables
+├── regions.py            # Empirical weights + calibration data
+└── __init__.py
+
+tribev2/                  # Meta's TRIBE v2 (upstream, 2 small CPU patches)
+├── demo_utils.py         # TribeModel — predicts brain response to content
+├── model.py              # FmriEncoder Transformer
+├── utils.py              # HCP atlas, ROI analysis
+└── ...
+```
+
+## Upstream credit
+
+Built on **TRIBE v2** by Meta FAIR — a foundation model for in-silico neuroscience.
+
+📄 [Paper](https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/) | 🤗 [Weights](https://huggingface.co/facebook/tribev2) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/facebookresearch/tribev2/blob/main/tribe_demo.ipynb)
 
 ```bibtex
 @article{dAscoli2026TribeV2,
@@ -190,8 +137,4 @@ If you use this software, please share your results with the broader research co
 
 ## License
 
-This project is licensed under CC-BY-NC-4.0. See [LICENSE](LICENSE) for details.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get involved.
+CC-BY-NC-4.0. See [LICENSE](LICENSE).
