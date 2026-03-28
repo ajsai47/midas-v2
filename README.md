@@ -1,6 +1,6 @@
 <div align="center">
 
-# tribe_score
+# Midas v2
 
 **Three independent mechanisms to predict content virality — before you post.**
 
@@ -64,8 +64,8 @@ A fine-tuned model trained on thousands of posts with real engagement data. Patt
 The brain model mechanism is live today:
 
 ```bash
-git clone https://github.com/ajsai47/tribev2.git
-cd tribev2
+git clone https://github.com/ajsai47/midas-v2.git
+cd midas-v2
 pip install -e .
 ```
 
@@ -86,17 +86,17 @@ print(result.group_scores)   # reward, memory, social, auditory breakdown
 
 ```bash
 # Score text
-tribe-score score --text "Your post content here"
-tribe-score score --text "Your post" --json
+midas score --text "Your post content here"
+midas score --text "Your post" --json
 
 # Compare A/B variants
-tribe-score compare --text "Version A" --text "Version B"
+midas compare --text "Version A" --text "Version B"
 
 # Explain per-region brain activation breakdown
-tribe-score explain --text "Your post content here"
+midas explain --text "Your post content here"
 
 # Generate brain heatmap
-tribe-score heatmap --text "Your post" --output brain.png
+midas heatmap --text "Your post" --output brain.png
 ```
 
 ## Brain model details
@@ -124,9 +124,9 @@ tribe-score heatmap --text "Your post" --output brain.png
 ## Architecture
 
 ```
-tribe_score/              # Brain model scoring engine (live)
+tribe_score/              # Midas v2 scoring engine (live)
 ├── scorer.py             # Brain activation → engagement score
-├── cli.py                # tribe-score CLI
+├── cli.py                # midas / tribe-score CLI
 ├── compare.py            # A/B comparison tables
 ├── regions.py            # Empirical weights + calibration data
 └── __init__.py
