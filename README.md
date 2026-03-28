@@ -2,44 +2,74 @@
 
 # tribe_score
 
-**Predict social media virality using brain activation patterns.**
+**Three independent mechanisms to predict content virality — before you post.**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 
-*What if you could run content through a brain model and know if it'll go viral — before you post it?*
-
 </div>
 
-## The idea
+## How it works
 
-Meta built [TRIBE v2](https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/) — a foundation model that predicts fMRI brain responses to any content (text, audio, video). It maps input through LLaMA 3.2, V-JEPA2, and Wav2Vec-BERT onto a cortical surface model of ~20k brain vertices.
+You share content. Three systems evaluate it independently. All three have to agree before it ships.
 
-We asked a different question: **do the brain regions that light up for viral content differ from non-viral content?**
+```
+                          ┌─────────────────────┐
+                          │     Your Content     │
+                          └──────────┬──────────┘
+                                     │
+                          ┌──────────▼──────────┐
+                          │       Matrix         │
+                          │    (orchestrator)    │
+                          └──┬───────┬───────┬──┘
+                             │       │       │
+                   ┌─────────▼──┐ ┌──▼─────────┐ ┌──▼─────────┐
+                   │   Brain    │ │   Agent     │ │  Fine-tuned │
+                   │   Model    │ │ Simulation  │ │    Model    │
+                   │ (TRIBE v2) │ │ (personas)  │ │  (scoring)  │
+                   └─────────┬──┘ └──┬─────────┘ └──┬─────────┘
+                             │       │               │
+                          ┌──▼───────▼───────────────▼──┐
+                          │     Virality Prediction      │
+                          │   go / revise / kill          │
+                          └─────────────────────────────┘
+```
 
-Yes. Dramatically.
+### Mechanism 1: Brain Model (live)
 
-We ran 20 LinkedIn posts with known engagement data through TRIBE v2, analyzed activation across all 180 HCP brain regions, and found **10 regions correlated with real-world virality at p<0.01**. The pattern is clear:
+Meta's [TRIBE v2](https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/) predicts fMRI brain responses to any content. We ran 20 LinkedIn posts with known engagement through it, analyzed all 180 HCP brain regions, and found **10 regions correlated with real-world virality at p<0.01**.
 
-- **Reward circuits fire** (orbitofrontal cortex) — the "I want more" response
+The pattern:
+- **Reward circuits fire** (orbitofrontal cortex) — "I want more of this"
 - **Memory encodes** (hippocampus) — memorable content gets shared
 - **Social cognition activates** (temporal pole) — social processing drives viral spread
 - **Auditory cortex suppresses** — viral content is visual/conceptual, not auditory
 
-We turned this into a scoring formula. Feed any text into `tribe_score`, and it tells you how viral-ready it is based on the neurological response pattern.
+Validation: **Spearman rho = 0.7522 (p = 0.000131)**. Viral posts avg NES = 81.9 vs low-engagement = 32.6.
 
-## Validation
+### Mechanism 2: Agent Simulation (coming)
 
-| Metric | Value |
-|--------|-------|
-| Spearman correlation with real engagement | **rho = 0.7522** (p = 0.000131) |
-| Viral post average NES | 81.9 |
-| Low-engagement post average NES | 32.6 |
-| Separation delta | +49.3 points |
+LLM-powered audience personas that simulate real reactions to your content. Not "rate this post 1-10" — actual simulated behavior: would they stop scrolling? Comment? Share? Scroll past?
 
-The brain knows what's going to spread before the algorithm does.
+Different personas for different audiences. A VC sees your post differently than an engineer. A founder reacts differently than a journalist. The simulation runs multiple audience segments and reports predicted behavior patterns.
+
+### Mechanism 3: Fine-tuned Scoring Model (coming)
+
+A fine-tuned model trained on thousands of posts with real engagement data. Pattern-matches against structural and linguistic features that correlate with virality — hook strength, narrative arc, specificity, emotional payload.
+
+### Matrix: The Orchestrator
+
+[Matrix](https://github.com/ajsai47/ghost) runs the pipeline. Content goes in, Matrix routes it through all three mechanisms, synthesizes the signals, and returns a verdict: ship it, revise it, or kill it. Each mechanism catches what the others miss:
+
+- Brain model catches **neurological arousal** the other two can't see
+- Agent simulation catches **audience-specific reactions** the brain model treats as universal
+- Fine-tuned model catches **structural patterns** (hook placement, length, formatting) that neither brain nor agents evaluate
+
+When all three agree something will work, it works.
 
 ## Quick start
+
+The brain model mechanism is live today:
 
 ```bash
 git clone https://github.com/ajsai47/tribev2.git
@@ -63,26 +93,23 @@ print(result.group_scores)   # reward, memory, social, auditory breakdown
 ### CLI
 
 ```bash
+# Score text
 tribe-score score --text "Your post content here"
 tribe-score score --text "Your post" --json
+
+# Compare A/B variants
 tribe-score compare --text "Version A" --text "Version B"
-tribe-score explain --text "Why does this work?"
+
+# Explain per-region brain activation breakdown
+tribe-score explain --text "Your post content here"
+
+# Generate brain heatmap
 tribe-score heatmap --text "Your post" --output brain.png
 ```
 
-### Compare variants
+## Brain model details
 
-```bash
-tribe-score compare \
-  --text "I just raised $5M for my AI startup" \
-  --text "Lessons from raising a seed round in 2026"
-```
-
-Returns a ranked table with NES scores and per-region breakdowns — pick the version that activates the right brain regions.
-
-## The scoring formula
-
-10 brain regions, empirically selected. Each region's activation is z-scored against calibration data, then weighted by its correlation with engagement.
+10 brain regions, empirically selected. Each region's activation is z-scored against calibration data, then weighted by its Spearman correlation with engagement.
 
 | Group | Brain Regions | Correlation | Signal |
 |-------|--------------|-------------|--------|
@@ -92,7 +119,7 @@ Returns a ranked table with NES scores and per-region breakdowns — pick the ve
 | **Auditory** | TA2 (-0.63), A4 (-0.59), PBelt (-0.58), MBelt (-0.58), A5 (-0.57) | **Negative** | Suppressed auditory cortex → higher engagement |
 | **Focus** | Brain variability (-0.60) | **Negative** | Focused activation > diffuse |
 
-### Tiers
+### Scoring tiers
 
 | NES | Tier | Pattern |
 |-----|------|---------|
@@ -102,12 +129,10 @@ Returns a ranked table with NES scores and per-region breakdowns — pick the ve
 | 20–39 | LOW ACTIVATION | Weak engagement pattern |
 | 0–19 | MINIMAL | No engagement signal |
 
-## What we built
-
-~800 lines on top of Meta's TRIBE v2:
+## Architecture
 
 ```
-tribe_score/              # Our scoring engine
+tribe_score/              # Brain model scoring engine (live)
 ├── scorer.py             # Brain activation → engagement score
 ├── cli.py                # tribe-score CLI
 ├── compare.py            # A/B comparison tables
@@ -121,9 +146,9 @@ tribev2/                  # Meta's TRIBE v2 (upstream, 2 small CPU patches)
 └── ...
 ```
 
-## Upstream credit
+## Credits
 
-Built on **TRIBE v2** by Meta FAIR — a foundation model for in-silico neuroscience.
+Brain model built on **TRIBE v2** by Meta FAIR.
 
 📄 [Paper](https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/) | 🤗 [Weights](https://huggingface.co/facebook/tribev2) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/facebookresearch/tribev2/blob/main/tribe_demo.ipynb)
 
