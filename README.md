@@ -102,6 +102,80 @@ tribev2/
 └── studies/             # Dataset definitions (Algonauts2025, Lahner2024, …)
 ```
 
+---
+
+## tribe_score — Neural Engagement Scoring
+
+`tribe_score` is a scoring engine built on top of TRIBE v2 that predicts how engaging content will be on social media (LinkedIn). It uses 10 brain regions empirically correlated with post engagement (p<0.01, n=20 posts) to compute a **Neural Engagement Score (NES)** from 0–100.
+
+**Validation**: Spearman rho=0.7522 (p=0.000131) with actual engagement. Viral posts average NES=81.9 vs low-engagement posts at NES=32.6.
+
+### Python API
+
+```python
+from tribe_score import NeuralEngagementScorer
+
+scorer = NeuralEngagementScorer()
+
+# Score inline text
+result = scorer.score_text("I just got fired from Google. Best thing that ever happened.")
+print(result.nes)            # 0-100 composite score
+print(result.tier)           # e.g. "NEURAL VIRAL"
+print(result.group_scores)   # per-group breakdown
+print(result.top_regions)    # top activated HCP regions
+
+# Score a file
+result = scorer.score("post.txt")
+
+# Compare variants
+results = scorer.compare("version_a.txt", "version_b.txt")
+```
+
+### CLI
+
+```bash
+# Score text
+tribe-score score --text "Your post content here"
+tribe-score score --text "Your post" --json
+
+# Score a file
+tribe-score score post.txt
+
+# Compare variants
+tribe-score compare --text "Version A" --text "Version B"
+
+# Explain per-region breakdown
+tribe-score explain --text "Your post content here"
+
+# Generate brain heatmap (requires plotting extras)
+tribe-score heatmap --text "Your post" --output brain.png
+```
+
+### How Scoring Works
+
+The scorer extracts activation from 10 HCP brain regions that showed statistically significant correlation with LinkedIn engagement:
+
+| Group | Regions | Signal |
+|-------|---------|--------|
+| **Reward** | pOFC, OFC | Higher activation → higher engagement |
+| **Memory** | Hippocampus | Higher activation → higher engagement |
+| **Social** | TGd, TGv (temporal pole) | Higher activation → higher engagement |
+| **Auditory** | TA2, A4, PBelt, MBelt, A5 | **Suppressed** in viral content |
+
+Each region's activation is z-scored against calibration data, then weighted by its Spearman correlation coefficient. Brain variability (std across vertices) is also factored in — more focused activation patterns score higher.
+
+### Scoring Tiers
+
+| NES Range | Tier | Meaning |
+|-----------|------|---------|
+| 80–100 | NEURAL VIRAL | Strong reward + memory + social, suppressed auditory |
+| 60–79 | HIGH ACTIVATION | Good engagement pattern |
+| 40–59 | MODERATE | Mixed signal |
+| 20–39 | LOW ACTIVATION | Weak engagement pattern |
+| 0–19 | MINIMAL | No engagement signal |
+
+---
+
 ## Contributing to open science
 
 If you use this software, please share your results with the broader research community using the following citation:

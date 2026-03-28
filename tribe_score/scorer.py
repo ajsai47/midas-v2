@@ -1,4 +1,8 @@
-"""Neural engagement scoring engine built on TRIBE v2 brain predictions."""
+"""Neural engagement scoring engine built on TRIBE v2 brain predictions.
+
+Scoring formula derived from empirical correlation analysis (n=20 LinkedIn posts).
+Uses 10 brain regions at p<0.01 significance + brain variability signal.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +13,15 @@ from pathlib import Path
 
 import numpy as np
 
-from .regions import DEFAULT_WEIGHTS, ENGAGEMENT_REGIONS, get_tier
+from .regions import (
+    CALIBRATION,
+    CALIBRATION_RAW_RANGE,
+    EMPIRICAL_REGIONS,
+    REGION_GROUPS,
+    TIERS,
+    VARIABILITY_RHO,
+    get_tier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,46 +47,60 @@ class NeuralScoreResult:
     nes: float  # 0-100 composite score
     tier: str
     tier_description: str
-    dimensions: dict[str, float]  # per-dimension 0-100 scores
-    top_regions: list[str]  # top-k most activated brain regions
+
+    # Per-region z-scores (how far above/below calibration mean)
+    region_zscores: dict[str, float]
+
+    # Grouped scores for display
+    group_scores: dict[str, float]
+
+    # Top activated regions (from full 180-region atlas)
+    top_regions: list[str]
+
+    # Temporal dynamics
     temporal_profile: np.ndarray  # (n_segments,) mean activation over time
+
+    # Raw data for heatmaps/debugging
     raw_activation: np.ndarray  # (n_vertices,) mean vertex activations
+    brain_magnitude: float = 0.0
+    brain_variability: float = 0.0
+    variability_zscore: float = 0.0
+    raw_score: float = 0.0  # pre-normalization score
 
     def __str__(self) -> str:
-        parts = [f"NES: {self.nes:.1f} — {self.tier}"]
+        parts = [f"NES: {self.nes:.1f}/100 — {self.tier}"]
         parts.append(f"  {self.tier_description}")
-        parts.append("  Dimensions:")
-        for name, val in sorted(self.dimensions.items(), key=lambda x: -x[1]):
-            bar = "#" * int(val / 5)
-            parts.append(f"    {name:25s} {val:5.1f}  {bar}")
+        parts.append("")
+        parts.append("  Region Group Scores:")
+        for group, score in sorted(self.group_scores.items(), key=lambda x: -x[1]):
+            bar = "+" * max(0, int(score / 5)) if score > 0 else "-" * max(0, int(-score / 5))
+            parts.append(f"    {group:30s} {score:+6.2f}  {bar}")
+        parts.append(f"\n  Brain focus: {self.variability_zscore:+.2f}σ (lower variability = more focused)")
+        parts.append(f"  Magnitude: {self.brain_magnitude:.4f}  Variability: {self.brain_variability:.4f}")
         parts.append(f"  Top regions: {', '.join(self.top_regions[:5])}")
         return "\n".join(parts)
 
 
 class NeuralEngagementScorer:
-    """Score content by predicting brain activation with TRIBE v2.
+    """Score content using empirically-validated brain region correlations.
 
-    Parameters
-    ----------
-    model_id : str
-        HuggingFace model id or local checkpoint path.
-    weights : dict
-        Engagement dimension weights (must sum to ~1.0).
-    device : str
-        Torch device. "auto" picks CUDA if available.
-    cache_folder : str
-        Cache directory for TRIBE feature extraction.
+    The scoring formula uses 10 HCP brain regions that showed statistically
+    significant (p<0.01) correlation with LinkedIn post engagement in a
+    20-post calibration study. Each region's activation is z-scored against
+    calibration data, then weighted by its Spearman correlation coefficient.
+
+    Positive-rho regions (reward, memory, social): higher activation = higher score
+    Negative-rho regions (auditory cortex): lower activation = higher score
+    Brain variability: lower = more focused = higher score
     """
 
     def __init__(
         self,
         model_id: str = "facebook/tribev2",
-        weights: dict[str, float] | None = None,
         device: str = "auto",
         cache_folder: str | None = None,
     ):
         self.model_id = model_id
-        self.weights = weights or DEFAULT_WEIGHTS.copy()
         self.device = device
         self.cache_folder = cache_folder or str(
             Path.home() / ".cache" / "tribe_score"
@@ -88,17 +114,14 @@ class NeuralEngagementScorer:
         from tribev2.demo_utils import TribeModel
 
         logger.info("Loading TRIBE model from %s...", self.model_id)
-        # Build config overrides for local environment
         import torch as _torch
-        config_update = {}
 
-        # Override device for feature extractors if no CUDA
+        config_update = {}
         if not _torch.cuda.is_available():
             config_update["data.text_feature.device"] = "cpu"
             config_update["data.audio_feature.device"] = "cpu"
             config_update["data.video_feature.image.device"] = "cpu"
 
-        # Use ungated copy of Llama 3.2-3B if the original is inaccessible
         try:
             from transformers import AutoConfig
             AutoConfig.from_pretrained("meta-llama/Llama-3.2-3B")
@@ -115,7 +138,6 @@ class NeuralEngagementScorer:
         logger.info("Model loaded on %s", self.device)
 
     def _detect_modality(self, path: str) -> str:
-        """Return the get_events_dataframe kwarg name for a file path."""
         ext = Path(path).suffix.lower()
         if ext not in _EXT_TO_MODALITY:
             raise ValueError(
@@ -133,96 +155,116 @@ class NeuralEngagementScorer:
         preds, _ = self._model.predict(events, verbose=False)
         return preds
 
-    def _compute_dimension_scores(
-        self, mean_activation: np.ndarray
-    ) -> dict[str, float]:
-        """Compute per-dimension scores from mean vertex activation."""
-        from tribev2.utils import get_hcp_roi_indices
+    def _compute_empirical_score(
+        self, mean_activation: np.ndarray, brain_variability: float
+    ) -> tuple[float, dict[str, float], dict[str, float]]:
+        """Compute engagement score using empirically-validated regions.
 
-        dimension_scores = {}
-        for dim_name, regions in ENGAGEMENT_REGIONS.items():
-            try:
-                indices = get_hcp_roi_indices(regions)
-                dim_activation = mean_activation[indices].mean()
-                dimension_scores[dim_name] = float(dim_activation)
-            except (ValueError, IndexError) as e:
-                logger.warning("Skipping dimension %s: %s", dim_name, e)
-                dimension_scores[dim_name] = 0.0
-        return dimension_scores
-
-    def _normalize_dimensions(
-        self, raw_dims: dict[str, float]
-    ) -> dict[str, float]:
-        """Normalize raw dimension activations to 0-100 scale.
-
-        Uses min-max normalization across dimensions with a sigmoid stretch
-        to spread values across the range.
+        Returns (raw_score, region_zscores, group_scores).
         """
-        values = np.array(list(raw_dims.values()))
-        if values.max() == values.min():
-            return {k: 50.0 for k in raw_dims}
+        from tribev2.utils import summarize_by_roi, get_hcp_labels
 
-        # Sigmoid-based normalization: center on mean, stretch by std
-        mean, std = values.mean(), values.std()
-        if std < 1e-8:
-            std = 1.0
-        z_scores = (values - mean) / std
-        # Sigmoid maps z-scores to (0, 1), then scale to 0-100
-        normalized = 100.0 / (1.0 + np.exp(-z_scores))
-        return dict(zip(raw_dims.keys(), normalized.tolist()))
+        # Get per-ROI activations
+        roi_activations = summarize_by_roi(mean_activation)
+        region_labels = get_hcp_labels()
+
+        # Build label -> activation lookup
+        label_to_activation: dict[str, float] = {}
+        for j, label in enumerate(region_labels):
+            if label != "?":
+                label_to_activation[label] = float(roi_activations[j])
+
+        # Z-score each empirical region and weight by correlation
+        raw_score = 0.0
+        region_zscores: dict[str, float] = {}
+
+        for region, rho in EMPIRICAL_REGIONS.items():
+            if region not in label_to_activation:
+                logger.warning("Region %s not found in atlas", region)
+                continue
+            if region not in CALIBRATION:
+                continue
+
+            activation = label_to_activation[region]
+            cal_mean, cal_std = CALIBRATION[region]
+            if cal_std < 1e-8:
+                cal_std = 1.0
+
+            z = (activation - cal_mean) / cal_std
+            region_zscores[region] = z
+
+            # rho * z: positive rho + positive z = good
+            # negative rho + negative z = good (double negative = positive)
+            raw_score += rho * z
+
+        # Add brain variability signal
+        var_mean, var_std = CALIBRATION["_variability"]
+        if var_std < 1e-8:
+            var_std = 1.0
+        var_z = (brain_variability - var_mean) / var_std
+        raw_score += VARIABILITY_RHO * var_z
+
+        # Compute group scores for display
+        group_scores: dict[str, float] = {}
+        for group_name, regions in REGION_GROUPS.items():
+            group_total = 0.0
+            for r in regions:
+                if r in region_zscores:
+                    group_total += EMPIRICAL_REGIONS[r] * region_zscores[r]
+            group_scores[group_name] = group_total
+
+        group_scores["Focus (low variability)"] = VARIABILITY_RHO * var_z
+
+        return raw_score, region_zscores, group_scores
+
+    def _normalize_score(self, raw_score: float) -> float:
+        """Normalize raw score to 0-100 using calibration range."""
+        lo, hi = CALIBRATION_RAW_RANGE
+        if hi <= lo:
+            return 50.0
+        normalized = (raw_score - lo) / (hi - lo) * 100.0
+        return float(np.clip(normalized, 0, 100))
 
     def score(self, path: str, modality: str | None = None) -> NeuralScoreResult:
-        """Score a content file and return detailed neural engagement breakdown.
-
-        Parameters
-        ----------
-        path : str
-            Path to content file (.txt, .mp3, .mp4, etc.)
-        modality : str, optional
-            Override modality detection. One of "text_path", "audio_path", "video_path".
-        """
+        """Score a content file and return detailed neural engagement breakdown."""
         from tribev2.utils import get_topk_rois
 
         preds = self._predict(path, modality)
 
-        # Temporal profile: mean activation per segment
         temporal_profile = preds.mean(axis=1)
-
-        # Mean activation across all time segments
         mean_activation = preds.mean(axis=0)
 
-        # Per-dimension raw activations
-        raw_dims = self._compute_dimension_scores(mean_activation)
+        brain_magnitude = float(mean_activation.mean())
+        brain_variability = float(mean_activation.std())
 
-        # Normalize to 0-100
-        norm_dims = self._normalize_dimensions(raw_dims)
-
-        # Weighted composite score
-        nes = sum(
-            norm_dims[dim] * self.weights.get(dim, 0.0)
-            for dim in norm_dims
+        raw_score, region_zscores, group_scores = self._compute_empirical_score(
+            mean_activation, brain_variability
         )
 
-        # Top activated regions
+        nes = self._normalize_score(raw_score)
         top_regions = list(get_topk_rois(mean_activation, k=10))
-
         tier, tier_desc = get_tier(nes)
+
+        var_mean, var_std = CALIBRATION["_variability"]
+        variability_zscore = (brain_variability - var_mean) / max(var_std, 1e-8)
 
         return NeuralScoreResult(
             nes=nes,
             tier=tier,
             tier_description=tier_desc,
-            dimensions=norm_dims,
+            region_zscores=region_zscores,
+            group_scores=group_scores,
             top_regions=top_regions,
             temporal_profile=temporal_profile,
             raw_activation=mean_activation,
+            brain_magnitude=brain_magnitude,
+            brain_variability=brain_variability,
+            variability_zscore=variability_zscore,
+            raw_score=raw_score,
         )
 
     def score_text(self, text: str) -> NeuralScoreResult:
-        """Convenience method to score inline text.
-
-        Writes text to a temp file and scores it as text modality.
-        """
+        """Score inline text."""
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False, encoding="utf-8"
         ) as f:

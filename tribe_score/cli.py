@@ -9,26 +9,6 @@ from pathlib import Path
 import click
 
 
-def _parse_weights(ctx, param, value) -> dict[str, float] | None:
-    """Parse --weights emotional=0.4,reward=0.3 into a dict."""
-    if not value:
-        return None
-    # Map short names to full dimension names
-    aliases = {
-        "emotional": "emotional_arousal",
-        "reward": "reward_motivation",
-        "attention": "attention_capture",
-        "social": "social_cognition",
-        "memory": "memory_encoding",
-    }
-    weights = {}
-    for pair in value.split(","):
-        key, val = pair.strip().split("=")
-        key = aliases.get(key.strip(), key.strip())
-        weights[key] = float(val)
-    return weights
-
-
 @click.group()
 @click.option("--model", default="facebook/tribev2", help="Model ID or local path.")
 @click.option("--device", default="auto", help="Device: auto, cpu, cuda.")
@@ -46,13 +26,9 @@ def cli(ctx, model, device, cache):
 @click.argument("content", required=False)
 @click.option("--file", "-f", "file_path", help="Path to content file.")
 @click.option("--text", "-t", "text_input", help="Inline text to score.")
-@click.option(
-    "--weights", "-w", callback=_parse_weights, default=None,
-    help="Override weights: emotional=0.4,reward=0.3,..."
-)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
 @click.pass_context
-def score(ctx, content, file_path, text_input, weights, as_json):
+def score(ctx, content, file_path, text_input, as_json):
     """Score content for neural engagement.
 
     CONTENT can be inline text or a file path. Use --file or --text to be explicit.
@@ -61,7 +37,6 @@ def score(ctx, content, file_path, text_input, weights, as_json):
 
     scorer = NeuralEngagementScorer(
         model_id=ctx.obj["model"],
-        weights=weights,
         device=ctx.obj["device"],
         cache_folder=ctx.obj["cache"],
     )
@@ -93,7 +68,8 @@ def score(ctx, content, file_path, text_input, weights, as_json):
             "label": label,
             "nes": round(result.nes, 1),
             "tier": result.tier,
-            "dimensions": {k: round(v, 1) for k, v in result.dimensions.items()},
+            "raw_score": round(result.raw_score, 4),
+            "group_scores": {k: round(v, 4) for k, v in result.group_scores.items()},
             "top_regions": result.top_regions[:10],
         }, indent=2))
     else:
@@ -137,9 +113,10 @@ def compare(ctx, files, texts):
 def explain(ctx, content, file_path, text_input):
     """Explain which brain regions activated and why.
 
-    Shows per-dimension breakdown with neuroscience context.
+    Shows per-group breakdown with neuroscience context for the 10 empirical
+    regions that correlate with LinkedIn engagement (p<0.01).
     """
-    from .regions import ENGAGEMENT_REGIONS
+    from .regions import EMPIRICAL_REGIONS, REGION_GROUPS
     from .scorer import NeuralEngagementScorer
 
     scorer = NeuralEngagementScorer(
@@ -164,44 +141,51 @@ def explain(ctx, content, file_path, text_input):
 
     click.echo(f"\nNeural Engagement Score: {result.nes:.1f} — {result.tier}\n")
 
-    explanations = {
-        "emotional_arousal": (
-            "Emotional Arousal",
-            "Anterior Insula + ACC + Temporal Pole",
-            "Drives sharing and commenting behavior",
+    group_info = {
+        "Reward": (
+            "Posterior OFC + OFC",
+            "Value judgment and reward anticipation — drives saves and follows",
         ),
-        "reward_motivation": (
-            "Reward / Motivation",
-            "OFC + vmPFC",
-            "Creates 'I want more' response — saves and follows",
+        "Memory": (
+            "Hippocampus",
+            "Memory encoding — memorable content gets shared",
         ),
-        "attention_capture": (
-            "Attention Capture",
-            "FEF + DLPFC + Visual Cortex + IPS",
-            "Must grab attention for any engagement",
+        "Social": (
+            "Temporal Pole (dorsal + ventral)",
+            "Social/emotional processing — drives virality through social cognition",
         ),
-        "social_cognition": (
-            "Social Cognition",
-            "STS + TPJ + Fusiform",
-            "Social content processing — drives virality",
-        ),
-        "memory_encoding": (
-            "Memory Encoding",
-            "Parahippocampal + Retrosplenial",
-            "Memorable content gets shared",
+        "Auditory (suppressed)": (
+            "TA2, A4, PBelt, MBelt, A5",
+            "Auditory cortex SUPPRESSION in viral content — visual/conceptual > auditory",
         ),
     }
 
-    for dim, score_val in sorted(result.dimensions.items(), key=lambda x: -x[1]):
-        title, regions, desc = explanations.get(dim, (dim, "—", "—"))
-        bar = "#" * int(score_val / 5)
-        click.echo(f"  {title}")
-        click.echo(f"    Score:   {score_val:.1f}  {bar}")
-        click.echo(f"    Regions: {regions}")
+    for group_name, group_score in sorted(result.group_scores.items(), key=lambda x: -x[1]):
+        info = group_info.get(group_name)
+        if info:
+            regions_str, desc = info
+        else:
+            regions_str, desc = "—", "Brain focus signal"
+
+        bar = "+" * max(0, int(group_score * 2)) if group_score > 0 else "-" * max(0, int(-group_score * 2))
+        click.echo(f"  {group_name}")
+        click.echo(f"    Score:   {group_score:+.2f}  {bar}")
+        click.echo(f"    Regions: {regions_str}")
         click.echo(f"    Why:     {desc}")
-        click.echo(f"    HCP ROIs: {', '.join(ENGAGEMENT_REGIONS.get(dim, []))}")
+
+        # Show individual region z-scores for this group
+        if group_name in REGION_GROUPS:
+            region_details = []
+            for r in REGION_GROUPS[group_name]:
+                if r in result.region_zscores:
+                    rho = EMPIRICAL_REGIONS[r]
+                    z = result.region_zscores[r]
+                    region_details.append(f"{r}: z={z:+.2f} (rho={rho:+.4f})")
+            if region_details:
+                click.echo(f"    Detail:  {', '.join(region_details)}")
         click.echo()
 
+    click.echo(f"  Brain focus: {result.variability_zscore:+.2f}\u03c3 (lower variability = more focused)")
     click.echo(f"  Top 10 activated regions: {', '.join(result.top_regions[:10])}")
 
 
@@ -280,17 +264,21 @@ def _print_score(label: str, result):
 
         console = Console()
 
-        # Dimension table
+        # Group scores table
         table = Table(show_header=True, header_style="bold")
-        table.add_column("Dimension", style="cyan")
+        table.add_column("Region Group", style="cyan")
         table.add_column("Score", justify="right")
         table.add_column("Bar", min_width=20)
 
-        for dim, val in sorted(result.dimensions.items(), key=lambda x: -x[1]):
-            bar_len = int(val / 5)
-            color = "green" if val >= 60 else "yellow" if val >= 40 else "red"
-            bar = f"[{color}]{'#' * bar_len}[/{color}]"
-            table.add_row(dim.replace("_", " ").title(), f"{val:.1f}", bar)
+        for group, val in sorted(result.group_scores.items(), key=lambda x: -x[1]):
+            if val >= 0:
+                bar_len = min(20, int(val * 2))
+                color = "green" if val >= 1.0 else "yellow"
+                bar = f"[{color}]{'+'* bar_len}[/{color}]"
+            else:
+                bar_len = min(20, int(-val * 2))
+                bar = f"[red]{'-' * bar_len}[/red]"
+            table.add_row(group, f"{val:+.2f}", bar)
 
         console.print(Panel(
             f"[bold green]{result.nes:.1f}[/bold green] — [yellow]{result.tier}[/yellow]\n"

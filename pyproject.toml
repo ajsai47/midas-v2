@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tribev2"
-version = "0.1.0"
-description = "Deep multimodal brain encoding"
+version = "0.2.0"
+description = "Neural engagement scoring powered by TRIBE v2 brain predictions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}

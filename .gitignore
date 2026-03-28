@@ -31,5 +31,12 @@ wandb/
 .pytest_cache/
 .mypy_cache/
 
+# Experiment artifacts
+region_hunt_*.csv
+region_hunt_*.json
+region_hunt_*.png
+region_hunt_*.svg
+validation_*.csv
+
 # OS
 .DS_Store

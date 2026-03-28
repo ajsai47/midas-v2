@@ -1,83 +1,70 @@
-"""Brain region -> engagement dimension mapping using HCP MMP1 atlas names.
+"""Empirically-validated brain region weights for LinkedIn engagement prediction.
 
-Region names/patterns are compatible with tribev2.utils.get_hcp_roi_indices(),
-which supports exact names and prefix wildcards (e.g. "STS*").
+Derived from region hunt analysis (n=20 posts, Spearman correlation).
+Only regions with p<0.01 are used — strongest signal, least overfitting risk.
+
+Region names are HCP MMP1 atlas names compatible with tribev2.utils functions.
 """
 
-# Each dimension maps to a list of HCP MMP1 region names/patterns.
-# tribev2's get_hcp_roi_indices() resolves these to vertex indices.
-ENGAGEMENT_REGIONS: dict[str, list[str]] = {
-    # Emotional salience -> shares/comments
-    # Anterior Insula, ACC subregions, temporal pole
-    "emotional_arousal": [
-        "AAIC",      # Anterior Agranular Insular Complex
-        "p24",       # Posterior cingulate area 24
-        "33pr",      # Area 33 prime
-        "a24",       # Anterior cingulate area 24
-        "TGd",       # Temporal pole (dorsal)
-        "TGv",       # Temporal pole (ventral)
-    ],
-    # "I want more" -> saves/follows
-    # Orbitofrontal cortex, ventromedial prefrontal cortex
-    "reward_motivation": [
-        "OFC",       # Orbitofrontal cortex
-        "pOFC",      # Posterior orbitofrontal cortex
-        "10r",       # Area 10r (frontopolar)
-        "10v",       # Area 10v (ventral frontopolar)
-        "25",        # Subgenual area 25
-        "s32",       # Subgenual area 32
-    ],
-    # Must grab attention to get any engagement
-    # Frontal eye fields, DLPFC, visual cortex, intraparietal sulcus
-    "attention_capture": [
-        "FEF",       # Frontal eye fields
-        "8C",        # Area 8C (DLPFC)
-        "46",        # Area 46 (DLPFC)
-        "V1",        # Primary visual cortex
-        "V2",        # Visual area 2
-        "V3",        # Visual area 3
-        "V4",        # Visual area 4
-        "IP0",       # Intraparietal area 0
-        "IP1",       # Intraparietal area 1
-        "IP2",       # Intraparietal area 2
-    ],
-    # Social content goes viral
-    # Superior temporal sulcus, temporo-parietal junction, fusiform
-    "social_cognition": [
-        "STS*",      # Superior temporal sulcus (all subregions)
-        "TPOJ1",     # Temporo-parietal-occipital junction 1
-        "TPOJ2",     # Temporo-parietal-occipital junction 2
-        "TPOJ3",     # Temporo-parietal-occipital junction 3
-        "FFC",       # Fusiform face complex
-    ],
-    # Memorable = shareable
-    # Parahippocampal, retrosplenial cortex (cortical memory correlates)
-    "memory_encoding": [
-        "PreS",      # Presubiculum
-        "PHA1",      # Parahippocampal area 1
-        "PHA2",      # Parahippocampal area 2
-        "PHA3",      # Parahippocampal area 3
-        "RSC",       # Retrosplenial cortex
-    ],
+# Regions empirically correlated with LinkedIn engagement (p < 0.01).
+# Key: HCP region name, Value: Spearman rho with engagement.
+# Positive rho = higher activation → higher engagement.
+# Negative rho = lower activation → higher engagement.
+EMPIRICAL_REGIONS: dict[str, float] = {
+    # Reward / value judgment
+    "pOFC": +0.6559,   # Posterior orbitofrontal cortex (p=0.0017)
+    "OFC":  +0.6010,   # Orbitofrontal cortex (p=0.0051)
+    # Memory
+    "H":    +0.6266,   # Hippocampus (p=0.0031)
+    # Social / emotional processing
+    "TGd":  +0.6100,   # Temporal pole dorsal (p=0.0043)
+    "TGv":  +0.5724,   # Temporal pole ventral (p=0.0084)
+    # Auditory cortex (SUPPRESSED in viral content)
+    "TA2":  -0.6303,   # Auditory association (p=0.0029)
+    "A4":   -0.5867,   # Primary auditory (p=0.0065)
+    "PBelt": -0.5792,  # Parabelt (p=0.0075)
+    "MBelt": -0.5777,  # Medial belt (p=0.0076)
+    "A5":   -0.5739,   # Auditory area 5 (p=0.0081)
 }
 
-# Default dimension weights (sum to 1.0).
-# These are initial estimates; calibrate against real engagement data.
-DEFAULT_WEIGHTS: dict[str, float] = {
-    "emotional_arousal": 0.25,
-    "reward_motivation": 0.25,
-    "attention_capture": 0.20,
-    "social_cognition": 0.20,
-    "memory_encoding": 0.10,
+# Brain variability is negatively correlated: focused > diffuse
+VARIABILITY_RHO: float = -0.5995  # rho=-0.60, p=0.0052
+
+# Calibration stats from 20-post region hunt (mean, std per region).
+# Used to z-score new activations before applying weights.
+CALIBRATION: dict[str, tuple[float, float]] = {
+    "pOFC":  (-0.011540, 0.013402),
+    "TA2":   ( 0.223245, 0.078142),
+    "H":     (-0.041178, 0.017342),
+    "TGd":   (-0.086515, 0.042735),
+    "OFC":   (-0.006283, 0.005880),
+    "A4":    ( 0.294178, 0.114398),
+    "PBelt": ( 0.280630, 0.107057),
+    "MBelt": ( 0.169161, 0.060954),
+    "A5":    ( 0.294577, 0.133120),
+    "TGv":   (-0.079115, 0.031443),
+    "_variability": (0.111894, 0.030000),  # brain_variability mean/std estimate
 }
 
-# NES tier thresholds and labels
+# Raw score range from calibration data (computed below, updated at import).
+# Used for linear normalization to 0-100.
+CALIBRATION_RAW_RANGE: tuple[float, float] = (-9.0, 9.0)  # from 20-post calibration
+
+# Human-readable grouping for display purposes
+REGION_GROUPS: dict[str, list[str]] = {
+    "Reward":    ["pOFC", "OFC"],
+    "Memory":    ["H"],
+    "Social":    ["TGd", "TGv"],
+    "Auditory (suppressed)": ["TA2", "A4", "PBelt", "MBelt", "A5"],
+}
+
+# NES tier thresholds — recalibrated for empirical scoring
 TIERS: list[tuple[float, str, str]] = [
-    (85, "NEURAL VIRAL", "Extreme activation across engagement dimensions"),
-    (70, "HIGH ACTIVATION", "Strong neural engagement signal"),
-    (55, "MODERATE ACTIVATION", "Decent neural response, room to optimize"),
-    (40, "LOW ACTIVATION", "Weak neural engagement predicted"),
-    (0, "MINIMAL ACTIVATION", "Very low predicted brain response"),
+    (80, "NEURAL VIRAL", "Strong reward + memory + social activation, suppressed auditory"),
+    (60, "HIGH ACTIVATION", "Good engagement region activation pattern"),
+    (40, "MODERATE", "Mixed signal across engagement regions"),
+    (20, "LOW ACTIVATION", "Weak engagement pattern"),
+    (0,  "MINIMAL", "No engagement signal detected"),
 ]
 
 

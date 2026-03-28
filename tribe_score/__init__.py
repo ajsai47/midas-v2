@@ -1,6 +1,6 @@
 """tribe_score — Neural engagement scoring powered by TRIBE v2 brain predictions."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
-from .regions import DEFAULT_WEIGHTS, ENGAGEMENT_REGIONS
+from .regions import EMPIRICAL_REGIONS, REGION_GROUPS
 from .scorer import NeuralEngagementScorer, NeuralScoreResult

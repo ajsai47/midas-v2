@@ -6,6 +6,9 @@ from pathlib import Path
 
 from .scorer import NeuralEngagementScorer, NeuralScoreResult
 
+# Column order for the empirical region groups
+_GROUP_COLS = ["Reward", "Memory", "Social", "Auditory (suppressed)"]
+
 
 def format_comparison_table(
     results: list[tuple[str, NeuralScoreResult]],
@@ -43,11 +46,8 @@ def _rich_table(results: list[tuple[str, NeuralScoreResult]]) -> str:
     table.add_column("Content", style="cyan")
     table.add_column("NES", justify="right", style="bold green")
     table.add_column("Tier", style="yellow")
-    table.add_column("Emotional", justify="right")
-    table.add_column("Reward", justify="right")
-    table.add_column("Attention", justify="right")
-    table.add_column("Social", justify="right")
-    table.add_column("Memory", justify="right")
+    for col in _GROUP_COLS:
+        table.add_column(col, justify="right")
 
     for i, (label, r) in enumerate(results, 1):
         table.add_row(
@@ -55,11 +55,7 @@ def _rich_table(results: list[tuple[str, NeuralScoreResult]]) -> str:
             label,
             f"{r.nes:.1f}",
             r.tier,
-            f"{r.dimensions.get('emotional_arousal', 0):.1f}",
-            f"{r.dimensions.get('reward_motivation', 0):.1f}",
-            f"{r.dimensions.get('attention_capture', 0):.1f}",
-            f"{r.dimensions.get('social_cognition', 0):.1f}",
-            f"{r.dimensions.get('memory_encoding', 0):.1f}",
+            *(f"{r.group_scores.get(col, 0):+.2f}" for col in _GROUP_COLS),
         )
 
     buf = StringIO()
@@ -70,19 +66,17 @@ def _rich_table(results: list[tuple[str, NeuralScoreResult]]) -> str:
 
 def _ascii_table(results: list[tuple[str, NeuralScoreResult]]) -> str:
     """Fallback ASCII table when rich is not installed."""
-    lines = [
+    short = {"Reward": "Reward", "Memory": "Memory", "Social": "Social", "Auditory (suppressed)": "Audit"}
+    header = (
         f"{'Rank':<5} {'Content':<30} {'NES':>6} {'Tier':<20} "
-        f"{'Emot':>6} {'Reward':>6} {'Attn':>6} {'Social':>6} {'Memory':>6}"
-    ]
+        + " ".join(f"{short.get(c, c[:6]):>7}" for c in _GROUP_COLS)
+    )
+    lines = [header]
     lines.append("-" * len(lines[0]))
     for i, (label, r) in enumerate(results, 1):
+        cols = " ".join(f"{r.group_scores.get(c, 0):+7.2f}" for c in _GROUP_COLS)
         lines.append(
-            f"{i:<5} {label[:30]:<30} {r.nes:>6.1f} {r.tier:<20} "
-            f"{r.dimensions.get('emotional_arousal', 0):>6.1f} "
-            f"{r.dimensions.get('reward_motivation', 0):>6.1f} "
-            f"{r.dimensions.get('attention_capture', 0):>6.1f} "
-            f"{r.dimensions.get('social_cognition', 0):>6.1f} "
-            f"{r.dimensions.get('memory_encoding', 0):>6.1f}"
+            f"{i:<5} {label[:30]:<30} {r.nes:>6.1f} {r.tier:<20} {cols}"
         )
     return "\n".join(lines)
 
