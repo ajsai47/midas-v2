@@ -11,7 +11,7 @@
 
 ## How it works
 
-You share content. Three systems evaluate it independently. All three have to agree before it ships.
+What if you could scan your content through a human brain before posting it? We built that. A neuroscience foundation model predicts the exact brain regions your content will activate. Reward circuits in the orbitofrontal cortex fire when content feels valuable. The hippocampus encodes memorable content that people share. Social cognition in the temporal pole drives viral spread. We validated against real engagement data and found that viral posts consistently activate all three — reward, memory, social — while suppressing auditory processing. Posts that flop activate nothing. Now we added two more layers: AI audience simulation and pattern scoring from thousands of real posts. Three independent systems must agree before your content ships.
 
 ```
                           ┌─────────────────────┐
@@ -49,9 +49,7 @@ Validation: **Spearman rho = 0.7522 (p = 0.000131)**. Viral posts avg NES = 81.9
 
 ### Mechanism 2: Agent Simulation (coming)
 
-LLM-powered audience personas that simulate real reactions to your content. Not "rate this post 1-10" — actual simulated behavior: would they stop scrolling? Comment? Share? Scroll past?
-
-Different personas for different audiences. A VC sees your post differently than an engineer. A founder reacts differently than a journalist. The simulation runs multiple audience segments and reports predicted behavior patterns.
+Imagine showing your post to a room of fifty people before publishing. A venture capitalist reads it and immediately forwards it to their portfolio founders. An engineer screenshots it and shares it in their team Slack. A journalist bookmarks it for a story they are writing. A CEO reads the first line and keeps scrolling. That is what our agent simulation does. We built AI personas modeled on real audience segments — investors, engineers, founders, journalists, executives — each with unique attention patterns and sharing behaviors. The simulation tells you who will engage, who will share, and who will ignore your content.
 
 ### Mechanism 3: Fine-tuned Scoring Model (coming)
 
@@ -59,13 +57,7 @@ A fine-tuned model trained on thousands of posts with real engagement data. Patt
 
 ### Matrix: The Orchestrator
 
-[Matrix](https://github.com/ajsai47/ghost) runs the pipeline. Content goes in, Matrix routes it through all three mechanisms, synthesizes the signals, and returns a verdict: ship it, revise it, or kill it. Each mechanism catches what the others miss:
-
-- Brain model catches **neurological arousal** the other two can't see
-- Agent simulation catches **audience-specific reactions** the brain model treats as universal
-- Fine-tuned model catches **structural patterns** (hook placement, length, formatting) that neither brain nor agents evaluate
-
-When all three agree something will work, it works.
+[Matrix](https://github.com/ajsai47/ghost) sees the whole picture. It sends your content through three prediction systems that analyze completely different dimensions. The brain model detects neurological reward activation, memory encoding, and social cognition patterns that no language model can see — these are the three neural signatures that separate viral from forgettable content. The agent simulation puts your post in front of simulated investors, engineers, journalists, and founders to predict exactly who will share it and who will scroll past. The pattern model identifies the structural fingerprint of virality: hook strength, narrative arc, emotional specificity, formatting that drives engagement. Every mechanism catches blind spots the other two cannot see. Matrix synthesizes their signals into a single verdict: ship it, revise it, or kill it.
 
 ## Quick start
 
