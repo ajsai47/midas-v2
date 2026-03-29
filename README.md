@@ -36,7 +36,7 @@ You stop guessing, start shipping bangers.
 
 You've been there. You spend 45 minutes writing a LinkedIn post. You hit publish. Crickets.
 
-Meanwhile some guy posts *"I got fired. Best day of my life."* and gets 50,000 impressions.
+Meanwhile someone posts a raw, unpolished take and gets 50,000 impressions.
 
 **The difference isn't talent — it's pattern recognition.** Viral content activates specific brain regions, follows structural patterns, and resonates with specific audience archetypes. Midas v2 reverse-engineers all three.
 
@@ -51,29 +51,30 @@ Meanwhile some guy posts *"I got fired. Best day of my life."* and gets 50,000 i
 ## Demo
 
 ```bash
-$ midas "I just got fired from Google. Best thing that ever happened."
+$ midas "We just closed our Series A. Here's what nobody tells you about fundraising."
 
 ╭─────────── Midas v2 Evaluation ───────────╮
-│ GO — confidence 70%                        │
+│ SHIP — confidence 90%                      │
 │                                            │
-│ Majority positive: structural tier HIGH    │
-│ PERFORMER, agent share rate 50%            │
+│ All mechanisms agree: structural tier      │
+│ VIRAL CANDIDATE, agent share rate 67%      │
 ╰────────────────────────────────────────────╯
 ```
 
-Not good enough? **Let Midas rewrite it for you:**
+Got a rough draft? **Let Midas rewrite it for you:**
 
 ```bash
-$ midas optimize "I just got fired. Here's what I learned."
+$ midas optimize "Hot take: most startup advice is wrong."
 
-Iteration 0: structural 62 (HIGH PERFORMER) | agents 33% share | verdict: REVISE
-Iteration 1: structural 78 (VIRAL CANDIDATE) | agents 67% share | verdict: SHIP
-  → Changes: Added personal hook, power line break after opener, specific details
+Iteration 0: structural 45 (AVERAGE)          | agents 17% share | verdict: REVISE
+Iteration 1: structural 68 (HIGH PERFORMER)   | agents 50% share | verdict: REVISE
+Iteration 2: structural 82 (VIRAL CANDIDATE)  | agents 83% share | verdict: SHIP
+  → Changes: Added contrarian hook, specific examples, story arc, strong CTA
 
-Done! 2 iterations, structural 62 → 78, verdict: SHIP
+Done! 3 iterations, structural 45 → 82, verdict: SHIP
 ```
 
-From REVISE to SHIP in two iterations. Zero effort. That's the whole point.
+From REVISE to SHIP in three iterations. Zero effort. That's the whole point.
 
 ---
 
@@ -110,7 +111,7 @@ midas setup
 
 ```bash
 # Score a post — just paste your text
-midas "I just got fired from Google. Best thing that ever happened."
+midas "We just closed our Series A. Here's what nobody tells you about fundraising."
 
 # Full evaluation with all mechanisms
 midas evaluate "Your post text"
