@@ -11,7 +11,13 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    raise ImportError(
+        "Brain model requires additional dependencies. "
+        "Install with: pip install -e '.[brain]'"
+    ) from None
 
 from .regions import (
     CALIBRATION,

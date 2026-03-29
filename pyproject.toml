@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "midas-v2"
-version = "0.2.0"
+version = "0.3.0"
 description = "Three independent mechanisms to predict content virality — before you post."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,26 +12,9 @@ license = {file = "LICENSE"}
 authors = [{name = "AJ Green"}, {name = "Meta Platforms, Inc."}]
 
 dependencies = [
-  "neuralset==0.0.2",
-  "neuraltrain==0.0.2",
-  "torch>=2.5.1",
-  "numpy==2.2.6",
-  "torchvision>=0.20",
-  "x_transformers==1.27.20",
-  "einops",
-  "pyyaml",
-  "moviepy>=2.2.1",
-  "huggingface_hub",
-  "gtts",
-  "langdetect",
-  "spacy",
-  "soundfile",
-  "pip",
-  "Levenshtein",
-  "julius",
-  "transformers",
   "click",
   "rich",
+  "pyyaml",
 ]
 
 [project.scripts]
@@ -43,6 +26,27 @@ Homepage = "https://github.com/ajsai47/midas-v2"
 Repository = "https://github.com/ajsai47/midas-v2"
 
 [project.optional-dependencies]
+  brain = [
+    "torch>=2.5.1",
+    "torchvision>=0.20",
+    "numpy==2.2.6",
+    "neuralset==0.0.2",
+    "neuraltrain==0.0.2",
+    "x_transformers==1.27.20",
+    "einops",
+    "moviepy>=2.2.1",
+    "huggingface_hub",
+    "gtts",
+    "langdetect",
+    "spacy",
+    "soundfile",
+    "julius",
+    "transformers",
+    "Levenshtein",
+  ]
+  agents = [
+    "anthropic>=0.30",
+  ]
   plotting = [
     "nibabel",
     "matplotlib",
@@ -57,7 +61,10 @@ Repository = "https://github.com/ajsai47/midas-v2"
     "nibabel",
     "torchmetrics",
     "wandb",
-    "lightning",  
+    "lightning",
+  ]
+  all = [
+    "midas-v2[brain,agents,plotting]",
   ]
   test = [
     "pytest",
@@ -71,3 +78,6 @@ profile = "black"
 
 [tool.setuptools.packages.find]
 include = ["tribe*"]
+
+[tool.setuptools.package-data]
+tribe_score = ["structural/*.yaml"]
